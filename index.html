@@ -36,6 +36,23 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
+  body.dragover::before {
+    content: "Solte suas músicas aqui";
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(30, 30, 30, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    color: var(--color-primary);
+    z-index: 100;
+    pointer-events: none;
+  }
+
   header {
     position: sticky;
     top: 0;
@@ -154,7 +171,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 2rem;
+    gap: 1rem;
   }
   button.control-btn {
     background: none;
@@ -166,7 +183,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 2rem;
+    font-size: 1.5rem;
     padding: 0.1rem;
     border-radius: 50%;
   }
@@ -178,6 +195,9 @@
   }
   button.control-btn:active {
     transform: scale(0.95);
+  }
+  button.control-btn.active {
+    color: var(--color-primary);
   }
 
   .player-info {
@@ -221,6 +241,12 @@
     accent-color: var(--color-primary);
   }
 
+  .time-display {
+    font-size: 0.9rem;
+    color: var(--color-text-muted);
+    margin: 0 1rem;
+  }
+
   audio {
     display: none;
   }
@@ -250,6 +276,9 @@
   <section class="playlist" aria-label="Lista de músicas" role="list" id="playlist"></section>
   
   <div class="player-controls" role="region" aria-label="Controles do player">
+    <button class="control-btn" id="shuffle-btn" aria-label="Modo aleatório" title="Modo aleatório">
+      &#x1F500;
+    </button>
     <button class="control-btn" id="prev-btn" aria-label="Música anterior" title="Música anterior" disabled>
       &#9664;&#9664;
     </button>
@@ -259,6 +288,13 @@
     <button class="control-btn" id="next-btn" aria-label="Próxima música" title="Próxima música" disabled>
       &#9654;&#9654;
     </button>
+    <button class="control-btn" id="repeat-btn" aria-label="Modo repetição" title="Modo repetição">
+      &#x1F501;
+    </button>
+    
+    <div class="time-display">
+      <span id="current-time">0:00</span> / <span id="duration">0:00</span>
+    </div>
     
     <div class="volume-control">
       <span aria-hidden="true">🔊</span>
@@ -288,14 +324,32 @@
     const playPauseBtn = document.getElementById('play-pause-btn');
     const prevBtn = document.getElementById('prev-btn');
     const nextBtn = document.getElementById('next-btn');
+    const shuffleBtn = document.getElementById('shuffle-btn');
+    const repeatBtn = document.getElementById('repeat-btn');
     const playerInfo = document.getElementById('player-info');
     const progressBar = document.getElementById('progress-bar');
     const progressContainer = document.getElementById('progress-container');
     const volumeSlider = document.getElementById('volume-slider');
+    const currentTimeEl = document.getElementById('current-time');
+    const durationEl = document.getElementById('duration');
 
     let songs = [];
     let currentIndex = -1;
     let isPlaying = false;
+    let isShuffle = false;
+    let isRepeat = false;
+
+    function savePlaylist() {
+      localStorage.setItem('offlineMusicPlayer_playlist', JSON.stringify(songs.map(file => file.name)));
+    }
+
+    function loadPlaylist() {
+      const saved = localStorage.getItem('offlineMusicPlayer_playlist');
+      if (saved) {
+        const songNames = JSON.parse(saved);
+        updatePlayerInfo(`Playlist carregada (${songNames.length} músicas)`);
+      }
+    }
 
     function createSongElement(file, index) {
       const songEl = document.createElement('div');
@@ -357,6 +411,9 @@
       updatePlayerInfo(`Selecionado: ${file.name}`);
       playPauseBtn.disabled = false;
       updateControls();
+      
+      // Atualiza a duração quando os metadados estiverem carregados
+      audio.addEventListener('loadedmetadata', updateTimeDisplay, { once: true });
     }
 
     function updateActiveSong() {
@@ -366,12 +423,23 @@
       });
     }
 
+    function formatTime(seconds) {
+      const mins = Math.floor(seconds / 60);
+      const secs = Math.floor(seconds % 60);
+      return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    }
+
+    function updateTimeDisplay() {
+      currentTimeEl.textContent = formatTime(audio.currentTime);
+      durationEl.textContent = formatTime(audio.duration || 0);
+    }
+
     function playSong() {
       if (currentIndex === -1) return;
       audio.play()
         .then(() => {
           isPlaying = true;
-          playPauseBtn.innerHTML = '&#10073;&#10073;'; // Pause icon
+          playPauseBtn.innerHTML = '&#10073;&#10073;';
           playPauseBtn.setAttribute('aria-label', 'Pausar música');
           playPauseBtn.title = 'Pausar música';
           updatePlayerInfo(`Tocando: ${songs[currentIndex].name}`);
@@ -386,7 +454,7 @@
     function pauseSong() {
       audio.pause();
       isPlaying = false;
-      playPauseBtn.innerHTML = '&#9654;'; // Play icon
+      playPauseBtn.innerHTML = '&#9654;';
       playPauseBtn.setAttribute('aria-label', 'Tocar música');
       playPauseBtn.title = 'Tocar música';
       updatePlayerInfo(`Pausado: ${songs[currentIndex].name}`);
@@ -407,14 +475,17 @@
     }
 
     function playNext() {
-      if (currentIndex < songs.length - 1) {
+      if (isShuffle) {
+        loadSong(Math.floor(Math.random() * songs.length));
+      } else if (currentIndex < songs.length - 1) {
         loadSong(currentIndex + 1);
-        playSong();
-      } else {
-        // Volta para a primeira música quando chegar no final
+      } else if (isRepeat) {
         loadSong(0);
-        playSong();
+      } else {
+        pauseSong();
+        return;
       }
+      playSong();
     }
 
     function playPrev() {
@@ -422,6 +493,18 @@
         loadSong(currentIndex -1);
         playSong();
       }
+    }
+
+    function toggleShuffle() {
+      isShuffle = !isShuffle;
+      shuffleBtn.classList.toggle('active', isShuffle);
+      updatePlayerInfo(isShuffle ? 'Modo aleatório ativado' : 'Modo aleatório desativado');
+    }
+
+    function toggleRepeat() {
+      isRepeat = !isRepeat;
+      repeatBtn.classList.toggle('active', isRepeat);
+      updatePlayerInfo(isRepeat ? 'Modo repetição ativado' : 'Modo repetição desativado');
     }
 
     function updatePlayerInfo(text) {
@@ -434,7 +517,7 @@
       audio.src = '';
       isPlaying = false;
       playPauseBtn.disabled = true;
-      playPauseBtn.innerHTML = '&#9654;'; // Reset to play icon
+      playPauseBtn.innerHTML = '&#9654;';
       updatePlayerInfo('Nenhuma música selecionada');
       renderPlaylist();
       updateControls();
@@ -444,6 +527,7 @@
       const { currentTime, duration } = audio;
       const progressPercent = (currentTime / duration) * 100;
       progressBar.style.width = `${progressPercent}%`;
+      updateTimeDisplay();
     }
 
     function setProgress(e) {
@@ -457,10 +541,12 @@
       audio.volume = this.value;
     }
 
+    // Event Listeners
     fileInput.addEventListener('change', () => {
       const files = Array.from(fileInput.files).filter(f => f.type.startsWith('audio/'));
       if (files.length === 0) return;
       songs = songs.concat(files);
+      savePlaylist();
       renderPlaylist();
       if(currentIndex === -1) {
         loadSong(0);
@@ -472,14 +558,62 @@
     playPauseBtn.addEventListener('click', playPauseToggle);
     prevBtn.addEventListener('click', playPrev);
     nextBtn.addEventListener('click', playNext);
+    shuffleBtn.addEventListener('click', toggleShuffle);
+    repeatBtn.addEventListener('click', toggleRepeat);
 
     audio.addEventListener('timeupdate', updateProgressBar);
     progressContainer.addEventListener('click', setProgress);
     volumeSlider.addEventListener('input', setVolume);
     audio.addEventListener('ended', playNext);
 
-    // Inicializar volume
-    audio.volume = volumeSlider.value;
+    // Drag and Drop
+    document.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      document.body.classList.add('dragover');
+    });
+
+    document.addEventListener('dragleave', () => {
+      document.body.classList.remove('dragover');
+    });
+
+    document.addEventListener('drop', (e) => {
+      e.preventDefault();
+      document.body.classList.remove('dragover');
+      
+      const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('audio/'));
+      if (files.length > 0) {
+        songs = songs.concat(files);
+        savePlaylist();
+        renderPlaylist();
+        if(currentIndex === -1) loadSong(0);
+      }
+    });
+
+    // Keyboard Shortcuts
+    document.addEventListener('keydown', (e) => {
+      if (songs.length === 0) return;
+      
+      switch(e.code) {
+        case 'Space':
+          e.preventDefault();
+          playPauseToggle();
+          break;
+        case 'ArrowRight':
+          if (e.ctrlKey) playNext();
+          break;
+        case 'ArrowLeft':
+          if (e.ctrlKey) playPrev();
+          break;
+        case 'ArrowUp':
+          volumeSlider.value = Math.min(1, parseFloat(volumeSlider.value) + 0.1);
+          setVolume.call(volumeSlider);
+          break;
+        case 'ArrowDown':
+          volumeSlider.value = Math.max(0, parseFloat(volumeSlider.value) - 0.1);
+          setVolume.call(volumeSlider);
+          break;
+      }
+    });
 
     // Accessibility: label click keyboard support
     document.querySelector('.file-input-label').addEventListener('keydown', (e) => {
@@ -489,8 +623,10 @@
       }
     });
 
+    // Inicialização
+    audio.volume = volumeSlider.value;
+    loadPlaylist();
   })();
 </script>
-
 </body>
 </html>
