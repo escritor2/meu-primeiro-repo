@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Offline Music Player</title>
+<title>Offline Music Player Universal</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap');
 
@@ -250,11 +250,11 @@
 </head>
 <body>
 <header>
-  <h1>Offline Music Player</h1>
+  <h1>Offline Music Player Universal</h1>
 </header>
 <main>
   <label class="file-input-label" for="file-input" tabindex="0">Adicionar Músicas</label>
-  <input type="file" id="file-input" multiple accept=".mp3, .wav, .ogg, .m4a, .flac" aria-label="Adicionar músicas para a playlist" />
+  <input type="file" id="file-input" multiple accept="audio/*" aria-label="Adicionar músicas para a playlist" />
   
   <section class="playlist" aria-label="Lista de músicas" role="list" id="playlist"></section>
   
@@ -395,8 +395,13 @@
       playPauseBtn.disabled = false;
       updateControls();
       
-      // Atualiza a duração quando os metadados estiverem carregados
       audio.addEventListener('loadedmetadata', updateTimeDisplay, { once: true });
+      
+      // Verifica se o arquivo é suportado
+      audio.addEventListener('error', () => {
+        updatePlayerInfo(`Erro: Formato não suportado (${file.name})`);
+        console.error(`Formato de áudio não suportado: ${file.type}`);
+      }, { once: true });
     }
 
     function updateActiveSong() {
@@ -430,7 +435,7 @@
         })
         .catch(error => {
           console.error("Erro ao reproduzir:", error);
-          updatePlayerInfo(`Erro ao reproduzir: ${songs[currentIndex].name}`);
+          updatePlayerInfo(`Erro ao reproduzir: ${songs[currentIndex].name} (${error.message})`);
         });
     }
 
@@ -528,7 +533,20 @@
     fileInput.addEventListener('change', () => {
       const files = Array.from(fileInput.files);
       if (files.length === 0) return;
-      songs = songs.concat(files);
+      
+      // Filtra apenas arquivos que parecem ser de áudio
+      const audioFiles = files.filter(file => {
+        return file.type.startsWith('audio/') || 
+               ['.mp3', '.wav', '.ogg', '.m4a', '.flac', '.aac', '.webm', '.opus'].some(ext => 
+                 file.name.toLowerCase().endsWith(ext));
+      });
+      
+      if (audioFiles.length === 0) {
+        updatePlayerInfo('Nenhum arquivo de áudio válido encontrado');
+        return;
+      }
+      
+      songs = songs.concat(audioFiles);
       savePlaylist();
       renderPlaylist();
       if(currentIndex === -1) {
@@ -560,7 +578,18 @@
       document.body.classList.remove('dragover');
       const files = Array.from(e.dataTransfer.files);
       if (files.length > 0) {
-        songs = songs.concat(files);
+        const audioFiles = files.filter(file => {
+          return file.type.startsWith('audio/') || 
+                 ['.mp3', '.wav', '.ogg', '.m4a', '.flac', '.aac', '.webm', '.opus'].some(ext => 
+                   file.name.toLowerCase().endsWith(ext));
+        });
+        
+        if (audioFiles.length === 0) {
+          updatePlayerInfo('Nenhum arquivo de áudio válido encontrado');
+          return;
+        }
+        
+        songs = songs.concat(audioFiles);
         savePlaylist();
         renderPlaylist();
         if (currentIndex === -1) {
