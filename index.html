@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Offline Music Player Universal</title>
+<title>Offline Music Player</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap');
 
@@ -154,7 +154,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 1rem;
+    gap: 2rem;
   }
   button.control-btn {
     background: none;
@@ -166,7 +166,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.5rem;
+    font-size: 2rem;
     padding: 0.1rem;
     border-radius: 50%;
   }
@@ -178,9 +178,6 @@
   }
   button.control-btn:active {
     transform: scale(0.95);
-  }
-  button.control-btn.active {
-    color: var(--color-primary);
   }
 
   .player-info {
@@ -224,12 +221,6 @@
     accent-color: var(--color-primary);
   }
 
-  .time-display {
-    font-size: 0.9rem;
-    color: var(--color-text-muted);
-    margin: 0 1rem;
-  }
-
   audio {
     display: none;
   }
@@ -250,7 +241,7 @@
 </head>
 <body>
 <header>
-  <h1>Offline Music Player Universal</h1>
+  <h1>Offline Music Player</h1>
 </header>
 <main>
   <label class="file-input-label" for="file-input" tabindex="0">Adicionar Músicas</label>
@@ -259,9 +250,6 @@
   <section class="playlist" aria-label="Lista de músicas" role="list" id="playlist"></section>
   
   <div class="player-controls" role="region" aria-label="Controles do player">
-    <button class="control-btn" id="shuffle-btn" aria-label="Modo aleatório" title="Modo aleatório">
-      &#x1F500;
-    </button>
     <button class="control-btn" id="prev-btn" aria-label="Música anterior" title="Música anterior" disabled>
       &#9664;&#9664;
     </button>
@@ -271,13 +259,6 @@
     <button class="control-btn" id="next-btn" aria-label="Próxima música" title="Próxima música" disabled>
       &#9654;&#9654;
     </button>
-    <button class="control-btn" id="repeat-btn" aria-label="Modo repetição" title="Modo repetição">
-      &#x1F501;
-    </button>
-    
-    <div class="time-display">
-      <span id="current-time">0:00</span> / <span id="duration">0:00</span>
-    </div>
     
     <div class="volume-control">
       <span aria-hidden="true">🔊</span>
@@ -307,32 +288,14 @@
     const playPauseBtn = document.getElementById('play-pause-btn');
     const prevBtn = document.getElementById('prev-btn');
     const nextBtn = document.getElementById('next-btn');
-    const shuffleBtn = document.getElementById('shuffle-btn');
-    const repeatBtn = document.getElementById('repeat-btn');
     const playerInfo = document.getElementById('player-info');
     const progressBar = document.getElementById('progress-bar');
     const progressContainer = document.getElementById('progress-container');
     const volumeSlider = document.getElementById('volume-slider');
-    const currentTimeEl = document.getElementById('current-time');
-    const durationEl = document.getElementById('duration');
 
     let songs = [];
     let currentIndex = -1;
     let isPlaying = false;
-    let isShuffle = false;
-    let isRepeat = false;
-
-    function savePlaylist() {
-      localStorage.setItem('offlineMusicPlayer_playlist', JSON.stringify(songs.map(file => file.name)));
-    }
-
-    function loadPlaylist() {
-      const saved = localStorage.getItem('offlineMusicPlayer_playlist');
-      if (saved) {
-        const songNames = JSON.parse(saved);
-        updatePlayerInfo(`Playlist carregada (${songNames.length} músicas)`);
-      }
-    }
 
     function createSongElement(file, index) {
       const songEl = document.createElement('div');
@@ -394,14 +357,6 @@
       updatePlayerInfo(`Selecionado: ${file.name}`);
       playPauseBtn.disabled = false;
       updateControls();
-      
-      audio.addEventListener('loadedmetadata', updateTimeDisplay, { once: true });
-      
-      // Verifica se o arquivo é suportado
-      audio.addEventListener('error', () => {
-        updatePlayerInfo(`Erro: Formato não suportado (${file.name})`);
-        console.error(`Formato de áudio não suportado: ${file.type}`);
-      }, { once: true });
     }
 
     function updateActiveSong() {
@@ -411,23 +366,12 @@
       });
     }
 
-    function formatTime(seconds) {
-      const mins = Math.floor(seconds / 60);
-      const secs = Math.floor(seconds % 60);
-      return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-    }
-
-    function updateTimeDisplay() {
-      currentTimeEl.textContent = formatTime(audio.currentTime);
-      durationEl.textContent = formatTime(audio.duration || 0);
-    }
-
     function playSong() {
       if (currentIndex === -1) return;
       audio.play()
         .then(() => {
           isPlaying = true;
-          playPauseBtn.innerHTML = '&#10073;&#10073;';
+          playPauseBtn.innerHTML = '&#10073;&#10073;'; // Pause icon
           playPauseBtn.setAttribute('aria-label', 'Pausar música');
           playPauseBtn.title = 'Pausar música';
           updatePlayerInfo(`Tocando: ${songs[currentIndex].name}`);
@@ -435,14 +379,14 @@
         })
         .catch(error => {
           console.error("Erro ao reproduzir:", error);
-          updatePlayerInfo(`Erro ao reproduzir: ${songs[currentIndex].name} (${error.message})`);
+          updatePlayerInfo(`Erro ao reproduzir: ${songs[currentIndex].name}`);
         });
     }
 
     function pauseSong() {
       audio.pause();
       isPlaying = false;
-      playPauseBtn.innerHTML = '&#9654;';
+      playPauseBtn.innerHTML = '&#9654;'; // Play icon
       playPauseBtn.setAttribute('aria-label', 'Tocar música');
       playPauseBtn.title = 'Tocar música';
       updatePlayerInfo(`Pausado: ${songs[currentIndex].name}`);
@@ -463,17 +407,14 @@
     }
 
     function playNext() {
-      if (isShuffle) {
-        loadSong(Math.floor(Math.random() * songs.length));
-      } else if (currentIndex < songs.length - 1) {
+      if (currentIndex < songs.length - 1) {
         loadSong(currentIndex + 1);
-      } else if (isRepeat) {
-        loadSong(0);
+        playSong();
       } else {
-        pauseSong();
-        return;
+        // Volta para a primeira música quando chegar no final
+        loadSong(0);
+        playSong();
       }
-      playSong();
     }
 
     function playPrev() {
@@ -481,18 +422,6 @@
         loadSong(currentIndex -1);
         playSong();
       }
-    }
-
-    function toggleShuffle() {
-      isShuffle = !isShuffle;
-      shuffleBtn.classList.toggle('active', isShuffle);
-      updatePlayerInfo(isShuffle ? 'Modo aleatório ativado' : 'Modo aleatório desativado');
-    }
-
-    function toggleRepeat() {
-      isRepeat = !isRepeat;
-      repeatBtn.classList.toggle('active', isRepeat);
-      updatePlayerInfo(isRepeat ? 'Modo repetição ativado' : 'Modo repetição desativado');
     }
 
     function updatePlayerInfo(text) {
@@ -505,7 +434,7 @@
       audio.src = '';
       isPlaying = false;
       playPauseBtn.disabled = true;
-      playPauseBtn.innerHTML = '&#9654;';
+      playPauseBtn.innerHTML = '&#9654;'; // Reset to play icon
       updatePlayerInfo('Nenhuma música selecionada');
       renderPlaylist();
       updateControls();
@@ -515,7 +444,6 @@
       const { currentTime, duration } = audio;
       const progressPercent = (currentTime / duration) * 100;
       progressBar.style.width = `${progressPercent}%`;
-      updateTimeDisplay();
     }
 
     function setProgress(e) {
@@ -529,25 +457,10 @@
       audio.volume = this.value;
     }
 
-    // Event Listeners
     fileInput.addEventListener('change', () => {
-      const files = Array.from(fileInput.files);
+      const files = Array.from(fileInput.files).filter(f => f.type.startsWith('audio/'));
       if (files.length === 0) return;
-      
-      // Filtra apenas arquivos que parecem ser de áudio
-      const audioFiles = files.filter(file => {
-        return file.type.startsWith('audio/') || 
-               ['.mp3', '.wav', '.ogg', '.m4a', '.flac', '.aac', '.webm', '.opus'].some(ext => 
-                 file.name.toLowerCase().endsWith(ext));
-      });
-      
-      if (audioFiles.length === 0) {
-        updatePlayerInfo('Nenhum arquivo de áudio válido encontrado');
-        return;
-      }
-      
-      songs = songs.concat(audioFiles);
-      savePlaylist();
+      songs = songs.concat(files);
       renderPlaylist();
       if(currentIndex === -1) {
         loadSong(0);
@@ -559,56 +472,25 @@
     playPauseBtn.addEventListener('click', playPauseToggle);
     prevBtn.addEventListener('click', playPrev);
     nextBtn.addEventListener('click', playNext);
-    shuffleBtn.addEventListener('click', toggleShuffle);
-    repeatBtn.addEventListener('click', toggleRepeat);
 
     audio.addEventListener('timeupdate', updateProgressBar);
     progressContainer.addEventListener('click', setProgress);
     volumeSlider.addEventListener('input', setVolume);
     audio.addEventListener('ended', playNext);
 
-    // Drag and Drop
-    document.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      document.body.classList.add('dragover');
-    });
+    // Inicializar volume
+    audio.volume = volumeSlider.value;
 
-    document.addEventListener('drop', (e) => {
-      e.preventDefault();
-      document.body.classList.remove('dragover');
-      const files = Array.from(e.dataTransfer.files);
-      if (files.length > 0) {
-        const audioFiles = files.filter(file => {
-          return file.type.startsWith('audio/') || 
-                 ['.mp3', '.wav', '.ogg', '.m4a', '.flac', '.aac', '.webm', '.opus'].some(ext => 
-                   file.name.toLowerCase().endsWith(ext));
-        });
-        
-        if (audioFiles.length === 0) {
-          updatePlayerInfo('Nenhum arquivo de áudio válido encontrado');
-          return;
-        }
-        
-        songs = songs.concat(audioFiles);
-        savePlaylist();
-        renderPlaylist();
-        if (currentIndex === -1) {
-          loadSong(0);
-        } else {
-          updateControls();
-        }
+    // Accessibility: label click keyboard support
+    document.querySelector('.file-input-label').addEventListener('keydown', (e) => {
+      if(e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        fileInput.click();
       }
     });
-    document.addEventListener('dragleave', () => {
-      document.body.classList.remove('dragover');
-    });
-
-    // Inicialização
-    loadPlaylist();
-    renderPlaylist();
-    audio.volume = volumeSlider.value;
 
   })();
 </script>
+
 </body>
 </html>
